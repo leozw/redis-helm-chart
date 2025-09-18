@@ -3,9 +3,9 @@ entries:
   redis:
   - apiVersion: v2
     appVersion: 7.2.5
-    created: "2025-09-18T14:11:44.050098-03:00"
+    created: "2025-09-18T14:20:53.942215-03:00"
     description: A Helm chart for deploying Redis on Kubernetes
-    digest: 6793424f7c346e7d94ac4cd478a1a1f688bda6b4eb459e7ddc4e1131e38b6dfb
+    digest: dae13cfc097ea6b971e21af38463acea47c98752d476d01564332dae2719e56a
     home: https://redis.io/
     icon: https://redis.io/images/redis-white.png
     keywords:
@@ -25,4 +25,4 @@ entries:
     urls:
     - https://leozw.github.io/redis-helm-chart/redis-0.1.0.tgz
     version: 0.1.0
-generated: "2025-09-18T14:11:44.049031-03:00"
+generated: "2025-09-18T14:20:53.941506-03:00"
