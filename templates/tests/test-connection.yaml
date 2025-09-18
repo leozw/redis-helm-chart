@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "redis.fullname" . }}-test-connection"
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: redis-test
+      image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      command:
+        - sh
+        - -c
+        - |
+          {{- if .Values.auth.enabled }}
+          export REDISCLI_AUTH="${REDIS_PASSWORD}"
+          {{- end }}
+          
+          echo "Testing Redis connection..."
+          
+          {{- if eq .Values.architecture "standalone" }}
+          redis-cli -h {{ include "redis.serviceName" . }} -p {{ .Values.redis.port }} ping
+          if [ $? -eq 0 ]; then
+            echo "✓ Successfully connected to Redis"
+          else
+            echo "✗ Failed to connect to Redis"
+            exit 1
+          fi
+          
+          # Test write operation
+          redis-cli -h {{ include "redis.serviceName" . }} -p {{ .Values.redis.port }} SET test-key "test-value"
+          if [ $? -eq 0 ]; then
+            echo "✓ Write operation successful"
+          else
+            echo "✗ Write operation failed"
+            exit 1
+          fi
+          
+          # Test read operation
+          VALUE=$(redis-cli -h {{ include "redis.serviceName" . }} -p {{ .Values.redis.port }} GET test-key)
+          if [ "$VALUE" = "test-value" ]; then
+            echo "✓ Read operation successful"
+          else
+            echo "✗ Read operation failed"
+            exit 1
+          fi
+          
+          # Cleanup
+          redis-cli -h {{ include "redis.serviceName" . }} -p {{ .Values.redis.port }} DEL test-key
+          
+          {{- else if eq .Values.architecture "replication" }}
+          
+          # Test master connection
+          echo "Testing master connection..."
+          redis-cli -h {{ include "redis.masterServiceName" . }} -p {{ .Values.redis.port }} ping
+          if [ $? -eq 0 ]; then
+            echo "✓ Successfully connected to Redis master"
+          else
+            echo "✗ Failed to connect to Redis master"
+            exit 1
+          fi
+          
+          # Test write to master
+          redis-cli -h {{ include "redis.masterServiceName" . }} -p {{ .Values.redis.port }} SET test-key "test-value"
+          if [ $? -eq 0 ]; then
+            echo "✓ Write to master successful"
+          else
+            echo "✗ Write to master failed"
+            exit 1
+          fi
+          
+          # Give some time for replication
+          sleep 2
+          
+          # Test read from replica
+          echo "Testing replica connection..."
+          VALUE=$(redis-cli -h {{ include "redis.replicaServiceName" . }} -p {{ .Values.redis.port }} GET test-key)
+          if [ "$VALUE" = "test-value" ]; then
+            echo "✓ Replication is working"
+          else
+            echo "✗ Replication failed"
+            exit 1
+          fi
+          
+          # Cleanup
+          redis-cli -h {{ include "redis.masterServiceName" . }} -p {{ .Values.redis.port }} DEL test-key
+          {{- end }}
+          
+          echo ""
+          echo "All tests passed successfully!"
+      env:
+        {{- if .Values.auth.enabled }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "redis.secretName" . }}
+              key: {{ include "redis.secretPasswordKey" . }}
+        {{- end }}

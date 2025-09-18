@@ -1,0 +1,29 @@
+apiVersion: v2
+name: redis
+description: A Helm chart for deploying Redis on Kubernetes
+
+type: application
+
+# Chart version - increment when making changes
+version: 0.1.0
+
+# Redis version
+appVersion: "7.2.5"
+
+keywords:
+  - redis
+  - database
+  - cache
+  - keyvalue
+  - nosql
+
+maintainers:
+  - name: Your Name
+    email: your.email@example.com
+
+home: https://redis.io/
+icon: https://redis.io/images/redis-white.png
+
+sources:
+  - https://github.com/yourusername/redis-helm-chart
+  - https://github.com/redis/redis

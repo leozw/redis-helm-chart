@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "redis.configmapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+data:
+  redis.conf: |
+    # Redis configuration file
+    port {{ .Values.redis.port }}
+    bind 0.0.0.0
+    protected-mode no
+    
+    # Persistence
+    dir /data
+    
+    # Logging
+    loglevel notice
+    logfile ""
+    syslog-enabled no
+    
+    # Disable dangerous commands
+    {{- if .Values.auth.enabled }}
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    rename-command CONFIG "CONFIG_{{ randAlphaNum 32 }}"
+    {{- end }}
+    
+    # Custom configuration
+    {{- if .Values.redis.extraConfig }}
+{{ .Values.redis.extraConfig | indent 4 }}
+    {{- end }}
+  
+  master.conf: |
+    # Master specific configuration
+    port {{ .Values.redis.port }}
+    bind 0.0.0.0
+    protected-mode no
+    dir /data
+    
+    # Persistence for master
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    
+    # AOF persistence
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    {{- if .Values.redis.extraConfig }}
+{{ .Values.redis.extraConfig | indent 4 }}
+    {{- end }}
+  
+  replica.conf: |
+    # Replica specific configuration
+    port {{ .Values.redis.port }}
+    bind 0.0.0.0
+    protected-mode no
+    dir /data
+    
+    # Connect to master
+    replicaof {{ include "redis.masterServiceName" . }} {{ .Values.redis.port }}
+    
+    # Replica settings
+    replica-read-only yes
+    replica-serve-stale-data yes
+    replica-priority 100
+    
+    {{- if .Values.auth.enabled }}
+    # Authentication
+    masterauth $(REDIS_PASSWORD)
+    {{- end }}
+    
+    {{- if .Values.redis.extraConfig }}
+{{ .Values.redis.extraConfig | indent 4 }}
+    {{- end }}
+  
+  sentinel.conf: |
+    # Sentinel configuration
+    port {{ .Values.sentinel.port }}
+    bind 0.0.0.0
+    protected-mode no
+    
+    # Monitor master
+    sentinel monitor mymaster {{ include "redis.masterServiceName" . }} {{ .Values.redis.port }} {{ .Values.sentinel.quorum }}
+    sentinel down-after-milliseconds mymaster {{ .Values.sentinel.downAfterMilliseconds }}
+    sentinel failover-timeout mymaster {{ .Values.sentinel.failoverTimeout }}
+    sentinel parallel-syncs mymaster {{ .Values.sentinel.parallelSyncs }}
+    
+    {{- if .Values.auth.enabled }}
+    # Authentication
+    sentinel auth-pass mymaster $(REDIS_PASSWORD)
+    {{- end }}
+    
+    # Logging
+    logfile ""
+    loglevel notice
+  
+  ping-liveness.sh: |
+    #!/bin/bash
+    {{- if .Values.auth.enabled }}
+    export REDISCLI_AUTH="$REDIS_PASSWORD"
+    {{- end }}
+    response=$(
+      timeout -s 9 5 \
+      redis-cli -h localhost -p {{ .Values.redis.port }} ping
+    )
+    if [ "$response" != "PONG" ]; then
+      echo "Failed to ping Redis"
+      exit 1
+    fi
+    echo "Redis is alive"
+  
+  ping-readiness.sh: |
+    #!/bin/bash
+    {{- if .Values.auth.enabled }}
+    export REDISCLI_AUTH="$REDIS_PASSWORD"
+    {{- end }}
+    response=$(
+      timeout -s 9 1 \
+      redis-cli -h localhost -p {{ .Values.redis.port }} ping
+    )
+    if [ "$response" != "PONG" ]; then
+      echo "Failed to ping Redis"
+      exit 1
+    fi
+    echo "Redis is ready"

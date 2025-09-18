@@ -1,0 +1,282 @@
+# Default values for redis chart
+
+# Architecture: standalone or replication
+architecture: standalone  # Options: standalone, replication
+
+# Number of replicas (only for replication mode)
+replicaCount: 1
+
+# Use StatefulSet instead of Deployment
+statefulset: true
+
+# Redis image configuration
+image:
+  registry: docker.io
+  repository: redis
+  tag: "7.2.5-alpine"
+  pullPolicy: IfNotPresent
+
+# Image pull secrets
+imagePullSecrets: []
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""
+
+# Service Account
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+# Redis Authentication
+auth:
+  enabled: true
+  password: "RedisPassword123!"  # Change this in production!
+  # Use existing secret
+  existingSecret: ""
+  existingSecretPasswordKey: "redis-password"
+
+# Redis configuration
+redis:
+  port: 6379
+  # Extra Redis configuration (will be added to redis.conf)
+  extraConfig: |
+    # Snapshotting
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # Max memory policy
+    maxmemory-policy allkeys-lru
+    
+    # Append only mode
+    appendonly yes
+    appendfsync everysec
+    
+    # Max clients
+    maxclients 10000
+    
+    # TCP keepalive
+    tcp-keepalive 300
+    tcp-backlog 511
+    
+    # Slow log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    
+    # Client output buffer limits
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+
+# Master-Slave replication settings (only for replication mode)
+master:
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+replica:
+  replicaCount: 2
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+# Persistence configuration
+persistence:
+  enabled: true
+  # For Deployment mode
+  size: 8Gi
+  storageClassName: ""
+  accessMode: ReadWriteOnce
+  # For StatefulSet mode
+  volumeClaimTemplates:
+    - name: redis-data
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 8Gi
+
+# Update strategies
+updateStrategy:
+  type: RollingUpdate
+
+strategy:
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+  type: RollingUpdate
+
+# Pod configuration
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 6379
+  nodePort: ""
+  annotations: {}
+  labels: {}
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+  externalTrafficPolicy: Cluster
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: redis.example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+# Container ports
+containerPorts:
+  - name: redis
+    containerPort: 6379
+    protocol: TCP
+
+# Liveness and Readiness probes
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 5
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 5
+
+# Resources
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Extra environment variables
+extraEnvVars: []
+# - name: REDIS_EXTRA_FLAGS
+#   value: "--maxmemory 256mb"
+
+# Extra volumes
+extraVolumes: []
+
+# Extra volume mounts
+extraVolumeMounts: []
+
+# Init containers
+initContainers: []
+
+# Sidecar containers
+sidecars: []
+
+# Metrics exporter (Prometheus)
+metrics:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: oliver006/redis_exporter
+    tag: "v1.58.0"
+    pullPolicy: IfNotPresent
+  port: 9121
+  resources:
+    requests:
+      memory: 32Mi
+      cpu: 10m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+# Backup configuration
+backup:
+  enabled: false
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  s3:
+    enabled: false
+    bucket: ""
+    endpoint: ""
+    region: "us-east-1"
+    accessKeyId: ""
+    secretAccessKey: ""
+
+# Sentinel configuration (for HA)
+sentinel:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: redis
+    tag: "7.2.5-alpine"
+  replicaCount: 3
+  port: 26379
+  quorum: 2
+  downAfterMilliseconds: 5000
+  failoverTimeout: 60000
+  parallelSyncs: 1
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 100m
